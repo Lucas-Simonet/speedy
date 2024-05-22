@@ -1,10 +1,41 @@
+import asyncio
 from starlette.applications import Starlette
 from starlette.responses import PlainTextResponse
-from starlette.routing import Route, Mount, WebSocketRoute
-from starlette.staticfiles import StaticFiles
+from starlette.routing import Route, WebSocketRoute
 import uvicorn
+import contextlib
+from anyio import sleep, create_task_group, run
+queue = asyncio.Queue()
 
-def homepage(request):
+
+
+async def check_queue_status():
+    while True:
+        if not queue.empty():
+            item = await queue.get()
+            print(f"Processing item: {item}")
+        else:
+            print("Queue is empty")
+        await sleep(1)
+
+@contextlib.asynccontextmanager
+async def lifespan(app):
+    async with asyncio.TaskGroup() as task_group:
+        print("Running queue emptying task")
+        task = task_group.create_task(check_queue_status())    
+        try:    
+            yield
+        finally:
+            task.cancel()
+        try:
+            await task
+        except asyncio.CancelledError:
+            print("Background task cancelled")
+        print("Run on shutdown!")
+
+
+async def homepage(request):
+    await queue.put("homepage")
     return PlainTextResponse('Hello, world!')
 
 def user_me(request):
@@ -20,8 +51,6 @@ async def websocket_endpoint(websocket):
     await websocket.send_text('Hello, websocket!')
     await websocket.close()
 
-def startup():
-    print('Ready to go')
 
 
 routes = [
@@ -31,7 +60,7 @@ routes = [
     WebSocketRoute('/ws', websocket_endpoint),
 ]
 
-app = Starlette(debug=True, routes=routes, on_startup=[startup])
+app = Starlette(debug=True, routes=routes, lifespan=lifespan)
 
 if __name__ == "__main__":
     uvicorn.run(app)
