@@ -1,29 +1,36 @@
 import asyncio
 from starlette.applications import Starlette
 from starlette.responses import PlainTextResponse
-from starlette.routing import Route, WebSocketRoute
+from starlette.templating import Jinja2Templates
+from starlette.routing import Route, WebSocketRoute, Mount
+from starlette.staticfiles import StaticFiles
 import uvicorn
 import contextlib
-from anyio import sleep, create_task_group, run
-queue = asyncio.Queue()
+from anyio import sleep
+import os
 
+templates = Jinja2Templates(directory="templates")
+
+queue = asyncio.Queue()
 
 
 async def check_queue_status():
     while True:
+        # print(os.cpu_count())
         if not queue.empty():
             item = await queue.get()
             print(f"Processing item: {item}")
         else:
             print("Queue is empty")
-        await sleep(1)
+        await sleep(10)
+
 
 @contextlib.asynccontextmanager
 async def lifespan(app):
     async with asyncio.TaskGroup() as task_group:
         print("Running queue emptying task")
-        task = task_group.create_task(check_queue_status())    
-        try:    
+        task = task_group.create_task(check_queue_status())
+        try:
             yield
         finally:
             task.cancel()
@@ -35,29 +42,26 @@ async def lifespan(app):
 
 
 async def homepage(request):
-    await queue.put("homepage")
-    return PlainTextResponse('Hello, world!')
+    template = "index.html"
+    context = {"request": request}
+    return templates.TemplateResponse(template, context)
 
-def user_me(request):
-    username = "John Doe"
-    return PlainTextResponse('Hello, %s!' % username)
 
-def user(request):
-    username = request.path_params['username']
-    return PlainTextResponse('Hello, %s!' % username)
 
 async def websocket_endpoint(websocket):
     await websocket.accept()
-    await websocket.send_text('Hello, websocket!')
+    await websocket.send_text("Hello, ")
+    await sleep(1)
+    await websocket.send_text("I'm ")
+    await sleep(1)
+    await websocket.send_text(" a Websocket !!")
     await websocket.close()
 
 
-
 routes = [
-    Route('/', homepage),
-    Route('/user/me', user_me),
-    Route('/user/{username}', user),
-    WebSocketRoute('/ws', websocket_endpoint),
+    Route("/", homepage),
+    WebSocketRoute("/ws", websocket_endpoint),
+    Mount("/static", app=StaticFiles(directory="static"), name="static"),
 ]
 
 app = Starlette(debug=True, routes=routes, lifespan=lifespan)

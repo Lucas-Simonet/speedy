@@ -1,0 +1,20 @@
+{% extends "base.html" %}
+
+{% block content %}
+<main role="main">
+
+  <!-- Main jumbotron for a primary marketing message or call to action -->
+  <div class="jumbotron">
+    <div class="container">
+      <h1 class="display-3">Click to Generate text !</h1>
+      <p class="text-to-change"></p>
+      <p><a class="btn btn-primary btn-lg" href="#" role="button" id="learnMoreButton">Learn more &raquo;</a></p>
+    </div>
+  </div>
+
+    <hr>
+    <script src="{{ url_for('static', path='/js/ws_connection.js') }}"></script>
+
+  </div> <!-- /container -->
+</main>
+{% endblock %}
