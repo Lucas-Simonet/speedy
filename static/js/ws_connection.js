@@ -1,23 +1,23 @@
 document.addEventListener('DOMContentLoaded', (event) => {
-    const button = document.getElementById('learnMoreButton');
+    const button = document.getElementById('generateTextButton');
+    const socket = new WebSocket('ws://127.0.0.1:8000/ws');
     if (button) {
         button.addEventListener('click', (event) => {
             event.preventDefault();
-            document.querySelector('.jumbotron .container .text-to-change').innerHTML = "";
-            // Initialize WebSocket on button click
-            const socket = new WebSocket('ws://127.0.0.1:8000/ws');
-            // Connection opened
-            socket.addEventListener('open', (event) => {
-                console.log('WebSocket is open now.');
-                // Send a message to the server
-                socket.send('Button clicked');
-            });
+            document.querySelector('.jumbotron .container .text-to-change-1').innerHTML = "";
+            document.querySelector('.jumbotron .container .text-to-change-2').innerHTML = "";
             // Listen for messages
+            socket.send("sending data from client")
             socket.addEventListener('message', (event) => {
                 console.log('Message from server ', event.data);
                 // Update the content of the div block
-                document.querySelector('.jumbotron .container .text-to-change').innerHTML += event.data;
-            });
+                const data = JSON.parse(event.data);
+                if (data.channel_1) {
+                    document.querySelector('.jumbotron .container .text-to-change-1').innerHTML += data.channel_1;
+                }
+                if (data.channel_2) {
+                    document.querySelector('.jumbotron .container .text-to-change-2').innerHTML += data.channel_2;
+                }            });
             // Handle connection close
             socket.addEventListener('close', (event) => {
                 console.log('WebSocket is closed now.');
@@ -28,6 +28,6 @@ document.addEventListener('DOMContentLoaded', (event) => {
             });
         });
     } else {
-        console.error('Button with ID "learnMoreButton" not found.');
+        console.error('Button with ID "generateTextButton" not found.');
     }
 });

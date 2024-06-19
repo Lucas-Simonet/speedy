@@ -2,7 +2,6 @@ from time import sleep
 from multiprocessing import Queue as InterProcessQueue
 
 
-
 def generate_text(ipq: InterProcessQueue):
     print("process started")
     for i in range(10):
