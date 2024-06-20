@@ -1,4 +1,5 @@
 import asyncio
+import os
 from starlette.applications import Starlette
 from starlette.templating import Jinja2Templates
 from starlette.routing import Route, WebSocketRoute, Mount
@@ -28,14 +29,20 @@ def generate_text_1(child_con: Connection):
         return
 
 
-def generate_text_2(child_con: Connection):
-    print("process started")
-    try:
-        for i in range(20):
-            child_con.send("Hello, ws 2 !")
-            sync_sleep(0.2)
-    except BrokenPipeError as e:
-        return
+def generate_text_2(child_con: Connection, llm: Llama):
+    prompt = "What is a mixin in python ?"
+
+    output = llm(
+      f"<|user|>\n{prompt}<|end|>\n<|assistant|>",
+      max_tokens=500,  # Generate up to 256 tokens
+      stop=["<|end|>"], 
+      echo=True,  # Whether to echo the prompt
+      stream=True,
+    )
+
+
+    for item in output:
+        child_con.send(item['choices'][0]['text'])
 
 
 templates = Jinja2Templates(directory="templates")
@@ -54,7 +61,7 @@ async def check_queue_status():
                 process_pool, generate_text_1, item[0]
             )
             asyncio.get_event_loop().run_in_executor(
-                process_pool, generate_text_2, item[1]
+                process_pool, generate_text_2, item[1], llm, 
             )
         else:
             await async_sleep(1)
@@ -64,8 +71,16 @@ async def check_queue_status():
 async def lifespan(app):
     async with asyncio.TaskGroup() as task_group:
         print("Downloading GGUH files")
-        hf_hub_download(repo_id="microsoft/Phi-3-mini-4k-instruct-gguf", filename="Phi-3-mini-4k-instruct-q4.gguf")
+        #hf_hub_download(repo_id="microsoft/Phi-3-mini-4k-instruct-gguf", filename="Phi-3-mini-4k-instruct-q4.gguf")
         print("Running queue emptying task")
+        print(os.getcwd())
+        
+        global llm
+        llm = Llama(
+            model_path="speedy/Phi-3-mini-4k-instruct-q4.gguf",  # path to GGUF file
+            n_ctx=4096,  # The max sequence length to use - note that longer sequence lengths require much more resources
+            n_threads=8, # The number of CPU threads to use, tailor to your system and the resulting performance
+        )
         task = task_group.create_task(check_queue_status())
         try:
             yield

@@ -17,11 +17,11 @@ def main():
     n_threads=8, # The number of CPU threads to use, tailor to your system and the resulting performance
     )
 
-    prompt = "output something funny and short"
+    prompt = "What is a mixin in python ?"
 
     output = llm(
       f"<|user|>\n{prompt}<|end|>\n<|assistant|>",
-      max_tokens=256,  # Generate up to 256 tokens
+      max_tokens=500,  # Generate up to 256 tokens
       stop=["<|end|>"], 
       echo=True,  # Whether to echo the prompt
       stream=True,
