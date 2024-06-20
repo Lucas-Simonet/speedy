@@ -30,7 +30,11 @@ def generate_text_1(child_con: Connection):
 
 
 def generate_text_2(child_con: Connection, llm: Llama):
-    prompt = "What is a mixin in python ?"
+    prompt = """
+    How do I select the value of this HTML component in JS ?
+    
+    <input type="text" id="name" name="name" required minlength="4" maxlength="8" size="10" />
+"""
 
     output = llm(
       f"<|user|>\n{prompt}<|end|>\n<|assistant|>",
@@ -77,9 +81,10 @@ async def lifespan(app):
         
         global llm
         llm = Llama(
-            model_path="speedy/Phi-3-mini-4k-instruct-q4.gguf",  # path to GGUF file
-            n_ctx=4096,  # The max sequence length to use - note that longer sequence lengths require much more resources
-            n_threads=8, # The number of CPU threads to use, tailor to your system and the resulting performance
+            model_path="speedy/Phi-3-mini-4k-instruct-q4.gguf",  
+            n_ctx=4096,  
+            n_threads=8, 
+            verbose=False
         )
         task = task_group.create_task(check_queue_status())
         try:
@@ -121,6 +126,7 @@ async def websocket_endpoint(websocket: WebSocket):
                     print(f"setting event on stop : {data}")
                     stop_event.set()
                 else:
+                    print(data)
                     await queue.put((child_con_1, child_con_2))
         except Exception as e:
             print(e)
