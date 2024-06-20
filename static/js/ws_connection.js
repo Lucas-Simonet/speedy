@@ -7,7 +7,7 @@ document.addEventListener('DOMContentLoaded', (event) => {
             document.querySelector('.jumbotron .container .text-to-change-1').innerHTML = "";
             document.querySelector('.jumbotron .container .text-to-change-2').innerHTML = "";
             // Listen for messages
-            prompt = document.querySelector('.jumbotron .container .prompt').innerHTML;
+            prompt = document.getElementById("prompt").value;
             console.log('here is the prompt : ', prompt)
             socket.send(prompt)
             socket.addEventListener('message', (event) => {

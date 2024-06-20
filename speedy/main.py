@@ -1,4 +1,5 @@
 import asyncio
+from collections.abc import Iterator
 import os
 from starlette.applications import Starlette
 from starlette.templating import Jinja2Templates
@@ -7,51 +8,47 @@ from starlette.websockets import WebSocket
 from starlette.staticfiles import StaticFiles
 import uvicorn
 import contextlib
-from asyncio import sleep as async_sleep
+from asyncio import Queue, sleep as async_sleep
 from time import sleep as sync_sleep
 from asyncio import Queue as AsyncQueue
 from concurrent.futures import ProcessPoolExecutor
 from multiprocessing import Pipe
 from multiprocessing.connection import Connection
-from starlette.endpoints import WebSocketEndpoint
-from speedy.text_generator_service import generate_text
-from huggingface_hub import hf_hub_download
-from llama_cpp import Llama
+from llama_cpp import CreateCompletionResponse, CreateCompletionStreamResponse, Llama
 
 
-def generate_text_1(child_con: Connection):
+class CompletionRequest:
+    def __init__(self, con: Connection, prompt: str) -> None:
+        self.con = con
+        self.prompt = prompt
+
+
+def generate_text_1(completion_request: CompletionRequest):
     print("process started")
     try:
-        for i in range(20):
-            child_con.send("Hello, ws 1 !")
+        for _ in range(20):
+            completion_request.con.send("Hello, ws 1 !")
             sync_sleep(0.6)
-    except BrokenPipeError as e:
+    except BrokenPipeError:
         return
 
 
-def generate_text_2(child_con: Connection, llm: Llama):
-    prompt = """
-    How do I select the value of this HTML component in JS ?
-    
-    <input type="text" id="name" name="name" required minlength="4" maxlength="8" size="10" />
-"""
+def generate_text_2(completion_request: CompletionRequest, llm: Llama):
 
-    output = llm(
-      f"<|user|>\n{prompt}<|end|>\n<|assistant|>",
-      max_tokens=500,  # Generate up to 256 tokens
-      stop=["<|end|>"], 
-      echo=True,  # Whether to echo the prompt
-      stream=True,
+    output: CreateCompletionResponse | Iterator[CreateCompletionStreamResponse] = llm(
+        f"<|user|>\n{completion_request.prompt}<|end|>\n<|assistant|>",
+        max_tokens=500,  # Generate up to 256 tokens
+        stop=["<|end|>"],
+        echo=True,  # Whether to echo the prompt
+        stream=True,
     )
-
-
     for item in output:
-        child_con.send(item['choices'][0]['text'])
+        completion_request.con.send(item["choices"][0]["text"])
 
 
 templates = Jinja2Templates(directory="templates")
 
-queue = AsyncQueue()
+queue: Queue = AsyncQueue()
 process_pool: ProcessPoolExecutor = ProcessPoolExecutor(max_workers=2)
 
 
@@ -65,7 +62,10 @@ async def check_queue_status():
                 process_pool, generate_text_1, item[0]
             )
             asyncio.get_event_loop().run_in_executor(
-                process_pool, generate_text_2, item[1], llm, 
+                process_pool,
+                generate_text_2,
+                item[1],
+                llm,
             )
         else:
             await async_sleep(1)
@@ -75,16 +75,16 @@ async def check_queue_status():
 async def lifespan(app):
     async with asyncio.TaskGroup() as task_group:
         print("Downloading GGUH files")
-        #hf_hub_download(repo_id="microsoft/Phi-3-mini-4k-instruct-gguf", filename="Phi-3-mini-4k-instruct-q4.gguf")
+        # hf_hub_download(repo_id="microsoft/Phi-3-mini-4k-instruct-gguf", filename="Phi-3-mini-4k-instruct-q4.gguf")
         print("Running queue emptying task")
         print(os.getcwd())
-        
+
         global llm
         llm = Llama(
-            model_path="speedy/Phi-3-mini-4k-instruct-q4.gguf",  
-            n_ctx=4096,  
-            n_threads=8, 
-            verbose=False
+            model_path="speedy/Phi-3-mini-4k-instruct-q4.gguf",
+            n_ctx=4096,
+            n_threads=8,
+            verbose=False,
         )
         task = task_group.create_task(check_queue_status())
         try:
@@ -126,8 +126,12 @@ async def websocket_endpoint(websocket: WebSocket):
                     print(f"setting event on stop : {data}")
                     stop_event.set()
                 else:
-                    print(data)
-                    await queue.put((child_con_1, child_con_2))
+                    await queue.put(
+                        (
+                            CompletionRequest(child_con_1, data),
+                            CompletionRequest(child_con_2, data),
+                        )
+                    )
         except Exception as e:
             print(e)
             stop_event.set()
